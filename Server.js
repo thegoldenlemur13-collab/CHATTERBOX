@@ -5,51 +5,44 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-
 const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// Serve static files
+// Serve frontend
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Catch-all route (fixes "Not Found")
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 const users = new Map();
-const rooms = new Set(['global']);
 
 io.on('connection', (socket) => {
-  console.log('🔥 New hero connected:', socket.id);
+  console.log('New connection');
 
   socket.on('setUsername', (username) => {
-    if (!username || users.has(username)) {
-      return socket.emit('usernameError', 'Username taken!');
-    }
-    users.set(username, socket.id);
+    if (!username) return;
+    users.set(socket.id, username);
     socket.username = username;
-    socket.join('global');
-    socket.emit('usernameSet', { username, rooms: Array.from(rooms) });
+    socket.emit('usernameSet', { username });
   });
 
-  socket.on('chatMessage', (data) => {
-    const room = data.room || 'global';
-    io.to(room).emit('chatMessage', {
+  socket.on('chatMessage', (message) => {
+    if (!socket.username) return;
+    io.emit('chatMessage', {
       username: socket.username,
-      message: data.message,
+      message: message,
       timestamp: new Date().toLocaleTimeString()
     });
   });
 
   socket.on('disconnect', () => {
-    if (socket.username) users.delete(socket.username);
+    users.delete(socket.id);
   });
 });
 
-// Use Render's port
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`🚀 Chatterbox successfully running on port ${PORT}`);
+  console.log(`Chatterbox running on port ${PORT}`);
 });
